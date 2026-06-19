@@ -1,24 +1,107 @@
-"""Fase 1/2 — Fine-tune de backbones CNN/ViT (camino a escala).
+"""Fine-tune REAL de un backbone CNN/ViT sobre el corpus de 3 clases (camino full local).
 
-Requiere `uv sync --extra dl` (torch/torchvision/timm) + MPS/GPU. No corre en el slice
-runnable. Reemplaza/compite con ForensicClassifier cuando se escala a datos reales.
+Entrena por transfer learning (timm), trackea PR-AUC de validación, y exporta la
+probabilidad P(fake-damaged) de val y test para que run_real calibre y evalúe con el
+mismo `src/evaluation`/`src/decision` que el slice. Requiere `uv sync --extra real` + MPS/GPU.
 """
 from __future__ import annotations
 
+from pathlib import Path
 
-def build_model(name: str = "resnet50", num_classes: int = 3):
-    """Crea un backbone pre-entrenado con cabeza de `num_classes`."""
-    try:
-        import timm
-    except ImportError as e:  # pragma: no cover - camino a escala
-        raise ImportError("Instalá las deps de DL: `uv sync --extra dl`") from e
+import numpy as np
+import pandas as pd
+
+from src.data.corpus import FAKE_ID
+
+IMAGENET_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_STD = (0.229, 0.224, 0.225)
+
+
+def _build_transforms(image_size: int):
+    from torchvision import transforms
+    return transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        transforms.ToTensor(),
+        transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
+    ])
+
+
+def _dataset(df: pd.DataFrame, root: Path, tfm):
+    import torch
+    from PIL import Image
+
+    class _DS(torch.utils.data.Dataset):
+        def __len__(self): return len(df)
+
+        def __getitem__(self, i):
+            row = df.iloc[i]
+            img = Image.open(root / row["path"]).convert("RGB")
+            return tfm(img), int(row["label_id"])
+
+    return _DS()
+
+
+def build_model(name: str, num_classes: int = 3):
+    import timm
     return timm.create_model(name, pretrained=True, num_classes=num_classes)
 
 
-# TODO(escala):
-#   - DataLoader sobre el corpus REAL con split generador-disjunto (ver data/corpus.py)
-#   - loop de entrenamiento (MPS), early stopping en PR-AUC de validación
-#   - calibración (temperature scaling) sobre val
-#   - exportar P(fake) de val/test a results/ para el mismo run_evaluate que el slice
-def train(*args, **kwargs):  # pragma: no cover - camino a escala
-    raise NotImplementedError("Implementar el loop de fine-tune al escalar (uv sync --extra dl).")
+def train(df: pd.DataFrame, root: str | Path, cfg: dict, device: str | None = None) -> dict:
+    import torch
+    from sklearn.metrics import average_precision_score
+    from torch.utils.data import DataLoader
+
+    root = Path(root)
+    dcfg = cfg["detection"]
+    name = dcfg.get("backbone", "resnet50")
+    epochs = dcfg.get("epochs", 8)
+    bs = dcfg.get("batch_size", 32)
+    lr = dcfg.get("lr", 3e-4)
+    image_size = cfg["data"]["image_size"]
+    if device is None:
+        device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
+
+    tfm = _build_transforms(image_size)
+    splits = {s: df[df["split"] == s].reset_index(drop=True) for s in ("train", "val", "test")}
+    loaders = {s: DataLoader(_dataset(d, root, tfm), batch_size=bs, shuffle=(s == "train"))
+               for s, d in splits.items()}
+
+    model = build_model(name).to(device)
+    opt = torch.optim.AdamW(model.parameters(), lr=lr)
+    loss_fn = torch.nn.CrossEntropyLoss()
+
+    def prob_fake(loader) -> np.ndarray:
+        model.eval()
+        out = []
+        with torch.no_grad():
+            for x, _ in loader:
+                p = model(x.to(device)).softmax(1)[:, FAKE_ID]
+                out.append(p.cpu().numpy())
+        return np.concatenate(out)
+
+    best_ap, best_state = -1.0, None
+    y_val = (splits["val"]["label_id"].to_numpy() == FAKE_ID).astype(int)
+    for ep in range(epochs):
+        model.train()
+        for x, y in loaders["train"]:
+            opt.zero_grad()
+            loss = loss_fn(model(x.to(device)), y.to(device))
+            loss.backward()
+            opt.step()
+        ap = average_precision_score(y_val, prob_fake(loaders["val"]))
+        print(f"  epoch {ep + 1}/{epochs}  val PR-AUC(fake)={ap:.3f}")
+        if ap > best_ap:
+            best_ap = ap
+            best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    return {
+        "val_prob_fake": prob_fake(loaders["val"]),
+        "val_is_fraud": y_val,
+        "test_prob_fake": prob_fake(loaders["test"]),
+        "test_is_fraud": (splits["test"]["label_id"].to_numpy() == FAKE_ID).astype(int),
+        "df_test": splits["test"],
+        "backbone": name,
+        "best_val_pr_auc": float(best_ap),
+    }

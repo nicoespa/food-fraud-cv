@@ -19,17 +19,19 @@ ml = [
     "scikit-learn>=1.4",
     "matplotlib>=3.8",
 ]
-# Heavy deep-learning path (scale): fine-tune CNN/ViT backbones.  uv sync --extra dl
-dl = [
+# FULL REAL pipeline (datos reales + difusión + fine-tune). Pesado, GPU/MPS.
+#   uv sync --extra real     (~6-8 GB con pesos del modelo de difusión)
+real = [
+    "scikit-learn>=1.4",
+    "matplotlib>=3.8",
     "torch>=2.2",
     "torchvision>=0.17",
     "timm>=1.0",
-]
-# Synthetic fake-damaged generation via diffusion (scale).  uv sync --extra gen
-gen = [
     "diffusers>=0.27",
     "transformers>=4.40",
     "accelerate>=0.30",
+    "datasets>=2.19",
+    "huggingface-hub>=0.23",
 ]
 dev = [
     "pytest>=8.0",

@@ -1,0 +1,35 @@
+# food-fraud-cv — config del PIPELINE REAL (full local: datos reales + difusión + fine-tune)
+seed: 42
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  generated: data/generated_real     # corpus real separado del sintético
+  results: results
+
+data:
+  classes: [genuine-undamaged, genuine-damaged, fake-damaged]
+  image_size: 224                    # tamaño de entrada del backbone ImageNet
+  split: {train: 0.7, val: 0.15, test: 0.15}
+  holdout_generator: sd-fungus       # variante de difusión vista SOLO en test
+
+real:
+  # imágenes reales por grupo (fresh y rotten) desde Densu341/Fresh-rotten-fruit.
+  # cada fresh genera fakes con las variantes de difusión → subí esto para escalar.
+  n_per_group: 150
+
+detection:
+  backbone: resnet50                 # timm: resnet50 | efficientnet_b0 | vit_small_patch16_224
+  epochs: 8
+  batch_size: 32
+  lr: 0.0003
+  calibration: isotonic
+
+decision:
+  costs: {c_fn: 10.0, c_fp: 3.0, c_review: 1.0}
+
+evaluation:
+  metrics: [pr_auc, roc_auc, tpr_at_fpr, ece, brier, expected_cost]
+  tpr_at_fpr: 0.05
+  per_generator_breakdown: true
+  bootstrap_iters: 1000

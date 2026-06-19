@@ -1,7 +1,13 @@
 # food-fraud-cv
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nicoespa/food-fraud-cv/blob/main/notebooks/food_fraud_cv_colab.ipynb)
+
 Claim-conditioned refund-evidence fraud detection for food-delivery photos.
 Final project — Ciencia de Datos (UdeSA). Replaces `meal-dispatch-uncertainty`.
+
+> **Cómo se corre:** el slice liviano y los tests, local (`uv`). El **pipeline real**
+> (datos + difusión + fine-tune) se corre en **GPU de Colab** — abrí el badge de arriba o
+> `notebooks/food_fraud_cv_colab.ipynb`. Ver `docs/03-real-pipeline.md`.
 
 **Problem.** Customers edit delivery photos with AI (add mold, make food look
 raw/spoiled) to trigger fraudulent refunds. The right question is **not** "is this
