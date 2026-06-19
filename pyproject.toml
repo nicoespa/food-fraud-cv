@@ -1,0 +1,40 @@
+[project]
+name = "food-fraud-cv"
+version = "0.1.0"
+description = "Claim-conditioned refund-evidence fraud detection for food delivery photos (genuine-undamaged / genuine-damaged / fake-damaged)."
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "numpy>=1.26,<2.2",
+    "pandas>=2.1,<2.3",
+    "scipy>=1.11",
+    "pyyaml>=6.0",
+    "pillow>=10.0",
+]
+
+# Heavier deps live in extras so the core slice stays fast to install.
+[project.optional-dependencies]
+# Training / inference for detection models.  Install:  uv sync --extra ml
+ml = [
+    "scikit-learn>=1.4",
+    "matplotlib>=3.8",
+    "torch>=2.2",
+    "torchvision>=0.17",
+    "timm>=1.0",
+    "scikit-image>=0.22",   # ELA / forensic signal helpers
+]
+# Synthetic fake-damaged generation (diffusion / inpainting).  uv sync --extra gen
+gen = [
+    "diffusers>=0.27",
+    "transformers>=4.40",
+    "accelerate>=0.30",
+]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

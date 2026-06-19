@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.python-version.local
+.pytest_cache/
+.ipynb_checkpoints/
+
+# uv
+# (uv.lock IS committed; the venv is not)
+
+# Data & model artifacts — heavy / not for git
+data/raw/*
+data/processed/*
+data/generated/*
+!data/**/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Results: keep the dir, ignore heavy artifacts (commit small CSV/JSON by hand)
+results/*
+!results/.gitkeep
+
+# Notebook outputs scratch
+notebooks/scratch/
+
+# OS
+.DS_Store

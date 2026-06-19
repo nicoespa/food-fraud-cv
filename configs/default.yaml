@@ -1,0 +1,56 @@
+# food-fraud-cv — config base (config-driven; sin hardcodear en el código)
+seed: 42
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  generated: data/generated
+  results: results
+
+data:
+  classes: [genuine-undamaged, genuine-damaged, fake-damaged]
+  # Fuentes públicas (VERIFICAR licencia + estructura en primera carga).
+  sources:
+    genuine_undamaged: food-101          # base de comida sana
+    genuine_damaged: fresh-rotten        # comida realmente dañada
+  image_size: 224
+  # Split con GENERADOR DISJUNTO: el test incluye un generador no visto en train.
+  split:
+    train: 0.7
+    val: 0.15
+    test: 0.15
+  holdout_generator: instruct-edit       # generador reservado solo para test
+
+generation:
+  # Generadores para fabricar fake-damaged (ver docs/01-...). IDs a verificar en HF.
+  generators:
+    - name: sd-inpaint
+      method: inpaint                    # máscara + "moho/objeto extraño"
+    - name: img2img
+      method: img2img                    # strength alto → "crudo/podrido"
+    - name: instruct-edit
+      method: instruct                   # held-out (solo test)
+  edits: [mold, raw, foreign-object, spoiled]
+  post_process:
+    strip_exif: true                     # imita captura del atacante
+    jpeg_recompress: true
+  per_class_limit: null                  # null = sin tope; setear chico para smoke
+
+detection:
+  model: zero-shot                       # zero-shot | resnet50 | efficientnet | vit | fusion
+  calibration: temperature               # none | temperature | isotonic | platt
+  backbone_pretrained: true
+
+decision:
+  # Costos del negocio (unidades relativas). FN=fraude pagado, FP=cliente honesto.
+  costs:
+    c_fn: 10.0        # pagar un reembolso fraudulento
+    c_fp: 3.0         # rechazar a un cliente honesto (churn/reputación)
+    c_review: 1.0     # mandar a revisión humana
+  policy: D2          # D0 accuracy | D1 costo esperado | D2 tres-zonas (con review)
+
+evaluation:
+  metrics: [pr_auc, roc_auc, tpr_at_fpr, ece, brier, expected_cost]
+  tpr_at_fpr: 0.05
+  per_generator_breakdown: true
+  bootstrap_iters: 1000
