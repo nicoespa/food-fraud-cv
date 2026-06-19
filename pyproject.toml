@@ -11,18 +11,21 @@ dependencies = [
     "pillow>=10.0",
 ]
 
-# Heavier deps live in extras so the core slice stays fast to install.
+# Extras layered by weight so the runnable slice stays fast to install.
 [project.optional-dependencies]
-# Training / inference for detection models.  Install:  uv sync --extra ml
+# Light analysis: classical-degradation generators, forensic features, sklearn
+# classifiers, calibration, metrics, figures.  THE RUNNABLE SLICE.  uv sync --extra ml
 ml = [
     "scikit-learn>=1.4",
     "matplotlib>=3.8",
+]
+# Heavy deep-learning path (scale): fine-tune CNN/ViT backbones.  uv sync --extra dl
+dl = [
     "torch>=2.2",
     "torchvision>=0.17",
     "timm>=1.0",
-    "scikit-image>=0.22",   # ELA / forensic signal helpers
 ]
-# Synthetic fake-damaged generation (diffusion / inpainting).  uv sync --extra gen
+# Synthetic fake-damaged generation via diffusion (scale).  uv sync --extra gen
 gen = [
     "diffusers>=0.27",
     "transformers>=4.40",

@@ -53,21 +53,18 @@ docs/01-data-generation-and-models.md   ← deep design: synthetic pipeline + mo
 Requires [`uv`](https://docs.astral.sh/uv/). Python is pinned to 3.12.
 
 ```bash
-# 1. core env (fast — no torch/diffusers)
-uv sync
-
-# 2. add ML deps when training detectors
+# 1. light env: runnable slice (classical generators + forensic features + sklearn)
 uv sync --extra ml
 
-# 3. add generation deps when building the fake-damaged set
-uv sync --extra gen
-
-# Phase-0 vertical slice (once data + a generator are wired):
-uv run python scripts/run_generate.py --config configs/default.yaml --limit 20
-uv run python scripts/run_evaluate.py  --config configs/default.yaml --model zero-shot
+# 2. STAR EXPERIMENT end-to-end (builds synthetic corpus, trains, evaluates):
+uv run --extra ml python scripts/run_experiment.py --config configs/default.yaml --rebuild
 
 # tests
-uv run --extra dev pytest -q
+uv run --extra ml --extra dev pytest -q
+
+# scale paths (heavy, GPU): fine-tune backbones / diffusion generation
+uv sync --extra dl    # torch/torchvision/timm  → src/detection/finetune.py
+uv sync --extra gen   # diffusers/transformers   → src/generation/diffusion.py
 ```
 
 ## Data setup
@@ -77,5 +74,14 @@ schema on first load. Generated `fake-damaged` images are cached in
 `data/generated/`. Full design in `docs/01-data-generation-and-models.md`.
 
 ## Status
-**Fase 0 — scaffold.** Estructura y brief listos; pipelines aún por implementar.
-Tracking y log en el vault: `Projects/Ciencia-de-Datos/Trabajo Final - food-fraud-cv/`.
+**Fases 0–3 — pipeline end-to-end RUNNABLE y testeado (slice sintético, sin GPU).**
+13 tests verdes. El experimento estrella demuestra empíricamente las dos tesis:
+- **Tesis 1:** el detector AIGC genérico (zero-shot) es inútil (PR-AUC ~0.47) e inunda
+  de falsos positivos sobre daño real → falla en verificación de reembolso.
+- **Tesis 2:** la política cost-sensitive con revisión humana (D2) baja el costo/caso de
+  ~0.88 (umbral ingenuo) a ~0.38; mejora significativa (IC95 bootstrap excluye el 0).
+
+Resultados completos: `docs/02-results-slice.md`. Camino a escala (Food-101 + difusión +
+fine-tune CNN/ViT) cableado y documentado (`src/data/sources.py`, `src/generation/diffusion.py`,
+`src/detection/finetune.py`). Tracking/log en el vault:
+`Projects/Ciencia-de-Datos/Trabajo Final - food-fraud-cv/`.

@@ -154,16 +154,20 @@ decisión, deps pinneadas (`uv`), resultados versionados como artefactos en
 pesados **fuera de git** (ver `.gitignore`).
 
 ## 9. Plan por fases
-- **Fase 0 (scaffold):** estructura, loaders de 1 dataset público, pipeline de
-  generación con **1 generador**, corpus 3-clases mínimo, **1 baseline zero-shot**
-  evaluado end-to-end. ← *vertical slice*.
-- **Fase 1 (datos + ML):** corpus completo multi-generador + dataset card; EDA;
-  fine-tune CNN/ViT; calibración.
-- **Fase 2 (forensics + costo):** señales forensics + fusión; evaluación
-  cost-sensitive; **holdout cross-generator**.
-- **Fase 3 (decisión + estrella):** políticas D0–D2 + experimento estrella + tests
-  estadísticos. MLLM claim-conditioned (stretch).
-- **Fase 4 (entrega):** informe + presentación (+ dashboard stretch).
+> **Estado 2026-06-19:** Fases 0–3 implementadas y corriendo end-to-end sobre un
+> **corpus sintético** (camino runnable, sin GPU), 13 tests verdes, ambas tesis
+> demostradas empíricamente (`docs/02-results-slice.md`). Falta el camino A ESCALA
+> (datos reales + difusión + fine-tune CNN/ViT) y la entrega (Fase 4).
+
+- **Fase 0 (scaffold):** estructura + núcleo de decisión cost-sensitive testeado. ✅
+- **Fase 1 (datos):** corpus 3-clases multi-generador con held-out, splits sin leakage
+  (`src/data/corpus.py`, `src/generation/classical.py`). ✅ slice sintético · ⏳ datos
+  reales (Food-101 + difusión: `src/data/sources.py`, `src/generation/diffusion.py`).
+- **Fase 2 (forensics + costo):** features forensics (ELA/FFT/ruido) + clasificador
+  calibrado + zero-shot genérico (`src/detection/`). ✅ · ⏳ fine-tune CNN/ViT (`finetune.py`).
+- **Fase 3 (decisión + estrella):** políticas D0–D2 + experimento estrella + bootstrap
+  (`scripts/run_experiment.py`, `src/evaluation/`). ✅ · ⏳ MLLM claim-conditioned (stretch).
+- **Fase 4 (entrega):** informe + presentación (+ dashboard stretch). ⏳
 - **MVP (mantener verde antes de cualquier stretch):** Fase 0 + corpus
   multi-generador + un CNN/ViT fine-tuneado y **calibrado** + evaluación
   cost-sensitive + política D1/D2 + experimento estrella. Stretch: MLLM,

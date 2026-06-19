@@ -1,11 +1,10 @@
-"""Fase 1 — Pipeline de generación del set `fake-damaged` (STUB).
+"""Fase 1 — Construye el corpus de 3 clases (camino runnable, sintético).
 
-Toma imágenes `genuine-undamaged`, las edita con cada generador configurado para
-simular daño (moho / crudo / objeto extraño), post-procesa (strip EXIF, recompresión)
-y cachea en data/generated/<generator>/. Diseño completo en
-docs/01-data-generation-and-models.md.
+Genera genuine-undamaged / genuine-damaged / fake-damaged (multi-generador, con
+held-out solo en test) y escribe imágenes + manifest.csv en data/generated/.
+El camino real (Food-101 + difusión) está en src/data/sources.py y src/generation/diffusion.py.
 
-    uv run --extra gen python scripts/run_generate.py --config configs/default.yaml --limit 20
+    uv run --extra ml python scripts/run_generate.py --config configs/default.yaml --n-sources 160
 """
 from __future__ import annotations
 
@@ -15,26 +14,22 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.config import load_config  # noqa: E402
+from src.data.corpus import build_corpus  # noqa: E402
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="configs/default.yaml")
-    ap.add_argument("--limit", type=int, default=None, help="imágenes por generador (smoke)")
+    ap.add_argument("--n-sources", type=int, default=160)
     args = ap.parse_args()
     cfg = load_config(args.config)
+    out_dir = Path(cfg["paths"]["generated"])
 
-    print("[run_generate] STUB — pendiente de implementar (Fase 1).")
-    print(f"  generadores: {[g['name'] for g in cfg['generation']['generators']]}")
-    print(f"  edits: {cfg['generation']['edits']}")
-    print(f"  held-out (solo test): {cfg['data']['holdout_generator']}")
-    print("  → ver docs/01-data-generation-and-models.md para el diseño del pipeline.")
-    # TODO(Fase 1):
-    #   1. cargar genuine-undamaged desde data/raw (src/data)
-    #   2. por cada generador: para inpaint, segmentar comida → máscara → editar;
-    #      para img2img/instruct, aplicar edición global; tag = {generator, edit}
-    #   3. post-proceso (src/generation): strip_exif, jpeg_recompress
-    #   4. guardar en data/generated/<generator>/ + manifest.csv (label, generator, edit, src)
+    df = build_corpus(cfg, out_dir, n_sources=args.n_sources)
+    print(f"corpus generado en {out_dir} → {len(df)} imágenes")
+    print(df.groupby(["split", "label"]).size().to_string())
+    print(f"\ngeneradores: {sorted(set(df['generator']) - {'none'})} "
+          f"(held-out solo en test: {cfg['data']['holdout_generator']})")
 
 
 if __name__ == "__main__":
