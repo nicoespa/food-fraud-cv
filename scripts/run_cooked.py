@@ -153,7 +153,17 @@ def main() -> None:
     logo = leave_one_generator_out(feats, df, costs, seed=cfg.get("seed", 42), fake_id=fake_id)
     print(logo.to_string())
 
+    print("\n=== SISTEMA EN CAPAS: píxel + procedencia + comportamiento → FUSIÓN ===")
+    from src.data.sources import load_food101_cooked
+    from src.detection.layered import run_layered_demo
+    db_images = load_food101_cooked(max(20, n // 5), image_size=cfg["data"]["image_size"], seed=cfg.get("seed", 42) + 1000)
+    layered = run_layered_demo(df, feats, fc, db_images, out_dir, cfg, costs, seed=cfg.get("seed", 42))
+    print(layered["table"].to_string())
+    print(f"(test={layered['n_test']}; de ellos fraude-por-reuso={layered['n_reused_test']}). "
+          "El píxel NO atrapa el reuso; la fusión sí.")
+
     out = {"metrics": rows, "logo": logo.reset_index().to_dict(orient="records"),
+           "layered": layered["table"].reset_index().to_dict(orient="records"),
            "n_test": int(te.sum()), "backbone": ft["backbone"], "domain": "cooked (Food-101)"}
 
     if args.adversarial:
