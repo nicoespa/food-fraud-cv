@@ -41,32 +41,37 @@ def _rows_url(offset: int, length: int = 100) -> str:
 
 
 def load_fresh_rotten(n_per_group: int, image_size: int, seed: int = 42):
-    """Muestrea n_per_group imágenes `fresh` y `rotten`. Devuelve {"fresh":[...], "rotten":[...]}."""
+    """Muestrea n_per_group imágenes `fresh` y `rotten`. Devuelve {"fresh":[...], "rotten":[...]}.
+
+    El dataset está ordenado por label (clases fresh primero, rotten después), así que
+    muestreamos cada grupo desde su REGIÓN (mitad baja / mitad alta) para llenarlos de forma
+    confiable incluso con n grande. Filtra por el label real, no por la región.
+    """
     rng = random.Random(seed)
     first = _get_json(_rows_url(0, 1))
     total = int(first.get("num_rows_total", 30000))
     names = next(f["type"]["names"] for f in first["features"] if f["name"] == "label")
 
     buckets: dict[str, list] = {"fresh": [], "rotten": []}
-    seen_offsets: set[int] = set()
-    attempts = 0
-    while not all(len(v) >= n_per_group for v in buckets.values()) and attempts < 120:
-        attempts += 1
-        offset = rng.randint(0, max(0, total - 100))
-        if offset in seen_offsets:
-            continue
-        seen_offsets.add(offset)
-        try:
-            data = _get_json(_rows_url(offset, 100))
-        except Exception:
-            continue
-        for item in data.get("rows", []):
-            row = item["row"]
-            group = "fresh" if names[row["label"]].startswith("fresh") else "rotten"
-            if len(buckets[group]) >= n_per_group:
+    regions = {"fresh": (0, total // 2), "rotten": (total // 2, total)}
+    for group, (lo, hi) in regions.items():
+        seen: set[int] = set()
+        attempts = 0
+        while len(buckets[group]) < n_per_group and attempts < 400:
+            attempts += 1
+            offset = rng.randint(lo, max(lo, hi - 100))
+            if offset in seen:
                 continue
+            seen.add(offset)
             try:
-                buckets[group].append(_fetch_image(row["image"]["src"], image_size))
+                data = _get_json(_rows_url(offset, 100))
             except Exception:
-                pass
+                continue
+            for item in data.get("rows", []):
+                row = item["row"]
+                if names[row["label"]].startswith(group) and len(buckets[group]) < n_per_group:
+                    try:
+                        buckets[group].append(_fetch_image(row["image"]["src"], image_size))
+                    except Exception:
+                        pass
     return buckets

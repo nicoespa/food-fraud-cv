@@ -33,16 +33,25 @@ generador (con held-out), bootstrap CI. (Reutiliza `src/evaluation` y `src/decis
 - La **difusión es el cuello de botella**: ~3-6 s/imagen en MPS → cientos de imágenes =
   decenas de minutos. Conviene correr en background.
 
-## Correr
+## Correr — recomendado: Colab GPU (`notebooks/food_fraud_cv_colab.ipynb`)
+Localmente en MPS la difusión es lenta y a escala chica el resultado es degenerado
+(clases triviales de separar → todo ~1.0). Para números informativos hace falta **escala**
+(n grande + más pasos de difusión = fakes sutiles), y eso corre rápido en **Colab GPU**.
+
 ```bash
-uv sync --extra real
-# corpus real + difusión + fine-tune + evaluación (todo end-to-end):
-uv run --extra real python scripts/run_real.py --config configs/real.yaml
-# prueba chica primero (rápida) para validar el flujo:
-uv run --extra real python scripts/run_real.py --n-per-group 30
-# re-evaluar sin regenerar el corpus:
-uv run --extra real python scripts/run_real.py --reuse-corpus
+# Validación rápida del flujo (~5 min): n chico + pocos pasos de difusión
+python scripts/run_real.py --config configs/real.yaml --n-per-group 30 --steps 8
+
+# CORRIDA INFORMATIVA (escala real; ~20-30 min en una T4):
+#   usa configs/real.yaml → n_per_group=150, steps=25 (sutiles), backbone resnet50
+python scripts/run_real.py --config configs/real.yaml
 ```
+Artefactos: `results/experiment_real.json` y `.csv`. Corpus en `data/generated_real/`.
+
+> **Por qué la escala importa:** con pocos pasos de difusión los fakes tienen artefactos
+> obvios y hasta el zero-shot los detecta (todo 1.0). Con 25 pasos los fakes son sutiles →
+> recién ahí se ve la diferencia entre el detector genérico, el forense y el fine-tune, y
+> aparece (o no) el gap cross-generator. Test ≥ ~60 imgs (split 60/20/20) para métricas estables.
 Artefactos: `results/experiment_real.json` y `.csv`. Corpus en `data/generated_real/` (gitignored).
 
 ## Escalar

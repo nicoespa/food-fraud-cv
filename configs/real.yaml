@@ -10,19 +10,19 @@ paths:
 data:
   classes: [genuine-undamaged, genuine-damaged, fake-damaged]
   image_size: 224                    # tamaño de entrada del backbone ImageNet
-  split: {train: 0.7, val: 0.15, test: 0.15}
+  split: {train: 0.6, val: 0.2, test: 0.2}   # test más grande → métricas estables
   holdout_generator: sd-fungus       # variante de difusión vista SOLO en test
 
 real:
+  # ESCALA INFORMATIVA (correr en Colab GPU). Para validar rápido: --n-per-group 30 --steps 8.
   # imágenes reales por grupo (fresh y rotten) desde Densu341/Fresh-rotten-fruit.
-  # cada fresh genera fakes con las variantes de difusión → subí esto para escalar.
-  n_per_group: 40
-  steps: 8                           # pasos de difusión (bajo = rápido; subí para más calidad)
+  n_per_group: 150
+  steps: 25                          # pasos altos → fakes SUTILES (más difícil = más informativo)
 
 detection:
-  backbone: resnet18                 # timm: resnet18 (rápido) | resnet50 | vit_small_patch16_224
-  epochs: 5
-  batch_size: 16
+  backbone: resnet50                 # timm: resnet50 | vit_small_patch16_224 | resnet18 (rápido)
+  epochs: 12
+  batch_size: 32
   lr: 0.0003
   calibration: isotonic
 
