@@ -1,46 +1,72 @@
 """Carga de datos REALES (camino full local).
 
 Fuente: `Densu341/Fresh-rotten-fruit` (HF, 30.4K imgs reales, labels `fresh*`/`rotten*`).
-Usamos `fresh*` → genuine-undamaged y `rotten*` → genuine-damaged. Los `fake-damaged`
-se fabrican editando las `fresh` con difusión real (ver src/generation/diffusion.py).
+`fresh*` → genuine-undamaged, `rotten*` → genuine-damaged. Los `fake-damaged` se fabrican
+editando las `fresh` con difusión real (src/generation/diffusion.py).
 
-Streaming: solo bajamos las imágenes que muestreamos (no los 3 GB completos).
+Implementación: usamos el **datasets-server de HF por HTTP** (endpoint /rows) en vez de la
+librería `datasets` — más liviano (bajamos solo las imágenes que muestreamos) y evita un bug
+de decodificación de labels de la librería v5 con este repo. Muestreo desde offsets random
+para cubrir tanto clases fresh (al inicio) como rotten (más adelante).
 """
 from __future__ import annotations
 
-import numpy as np
+import io
+import random
+
+import requests  # usa certifi → evita el SSL CERTIFICATE_VERIFY_FAILED de urllib en macOS
 from PIL import Image
 
 DATASET_ID = "Densu341/Fresh-rotten-fruit"
+_ROWS = "https://datasets-server.huggingface.co/rows"
+_HEADERS = {"User-Agent": "food-fraud-cv"}
 
 
-def _to_rgb(img: Image.Image, size: int) -> Image.Image:
-    return img.convert("RGB").resize((size, size))
+def _get_json(url: str) -> dict:
+    r = requests.get(url, headers=_HEADERS, timeout=90)
+    r.raise_for_status()
+    return r.json()
+
+
+def _fetch_image(src: str, size: int) -> Image.Image:
+    r = requests.get(src, headers=_HEADERS, timeout=90)
+    r.raise_for_status()
+    return Image.open(io.BytesIO(r.content)).convert("RGB").resize((size, size))
+
+
+def _rows_url(offset: int, length: int = 100) -> str:
+    params = {"dataset": DATASET_ID, "config": "default", "split": "train",
+              "offset": offset, "length": length}
+    return _ROWS + "?" + "&".join(f"{k}={requests.utils.quote(str(v))}" for k, v in params.items())
 
 
 def load_fresh_rotten(n_per_group: int, image_size: int, seed: int = 42):
-    """Muestrea n_per_group imágenes `fresh` y `rotten` (streaming).
+    """Muestrea n_per_group imágenes `fresh` y `rotten`. Devuelve {"fresh":[...], "rotten":[...]}."""
+    rng = random.Random(seed)
+    first = _get_json(_rows_url(0, 1))
+    total = int(first.get("num_rows_total", 30000))
+    names = next(f["type"]["names"] for f in first["features"] if f["name"] == "label")
 
-    Devuelve dict: {"fresh": [PIL,...], "rotten": [PIL,...]}.
-    """
-    from datasets import load_dataset
-
-    ds = load_dataset(DATASET_ID, split="train", streaming=True)
-    try:
-        names = ds.features["label"].names
-    except Exception:  # fallback al esquema conocido
-        names = ["freshapples", "freshbanana", "freshbittergroud", "freshcapsicum",
-                 "freshcucumber", "freshokra", "freshoranges", "freshpatato", "freshpotato",
-                 "freshtamto", "freshtomato", "rottenapples", "rottenbanana",
-                 "rottenbittergroud", "rottencapsicum", "rottencucumber", "rottenokra",
-                 "rottenoranges", "rottenpatato", "rottenpotato", "rottentamto", "rottentomato"]
-
-    ds = ds.shuffle(seed=seed, buffer_size=2000)
     buckets: dict[str, list] = {"fresh": [], "rotten": []}
-    for ex in ds:
-        group = "fresh" if names[ex["label"]].startswith("fresh") else "rotten"
-        if len(buckets[group]) < n_per_group:
-            buckets[group].append(_to_rgb(ex["image"], image_size))
-        if all(len(v) >= n_per_group for v in buckets.values()):
-            break
+    seen_offsets: set[int] = set()
+    attempts = 0
+    while not all(len(v) >= n_per_group for v in buckets.values()) and attempts < 120:
+        attempts += 1
+        offset = rng.randint(0, max(0, total - 100))
+        if offset in seen_offsets:
+            continue
+        seen_offsets.add(offset)
+        try:
+            data = _get_json(_rows_url(offset, 100))
+        except Exception:
+            continue
+        for item in data.get("rows", []):
+            row = item["row"]
+            group = "fresh" if names[row["label"]].startswith("fresh") else "rotten"
+            if len(buckets[group]) >= n_per_group:
+                continue
+            try:
+                buckets[group].append(_fetch_image(row["image"]["src"], image_size))
+            except Exception:
+                pass
     return buckets

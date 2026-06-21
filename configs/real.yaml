@@ -16,12 +16,13 @@ data:
 real:
   # imágenes reales por grupo (fresh y rotten) desde Densu341/Fresh-rotten-fruit.
   # cada fresh genera fakes con las variantes de difusión → subí esto para escalar.
-  n_per_group: 150
+  n_per_group: 40
+  steps: 8                           # pasos de difusión (bajo = rápido; subí para más calidad)
 
 detection:
-  backbone: resnet50                 # timm: resnet50 | efficientnet_b0 | vit_small_patch16_224
-  epochs: 8
-  batch_size: 32
+  backbone: resnet18                 # timm: resnet18 (rápido) | resnet50 | vit_small_patch16_224
+  epochs: 5
+  batch_size: 16
   lr: 0.0003
   calibration: isotonic
 

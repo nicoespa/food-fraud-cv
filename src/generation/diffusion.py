@@ -18,11 +18,11 @@ GEN_SIZE = 512  # SD 1.5 inpainting opera en 512x512
 # Variantes de generador. `held_out=True` → solo se usa en el split test.
 REAL_GENERATORS = {
     "sd-mold": dict(prompt="rotten food covered in green and white mold, decayed, spoiled, fuzzy mold spots",
-                    mask="blobs", guidance=7.5, steps=25, held_out=False),
+                    mask="blobs", guidance=7.5, steps=12, held_out=False),
     "sd-rot": dict(prompt="spoiled rotten brown mushy decayed food, dark rot, slime",
-                   mask="center", guidance=9.0, steps=25, held_out=False),
+                   mask="center", guidance=9.0, steps=12, held_out=False),
     "sd-fungus": dict(prompt="fuzzy white fungus and mold spores spreading over food, biohazard, decomposed",
-                      mask="scatter", guidance=6.0, steps=30, held_out=True),  # HELD-OUT
+                      mask="scatter", guidance=6.0, steps=12, held_out=True),  # HELD-OUT
 }
 NEG_PROMPT = "fresh, clean, appetizing, high quality, ripe"
 
@@ -71,14 +71,16 @@ def make_mask(kind: str, rng: np.random.Generator, size: int = GEN_SIZE) -> Imag
 
 
 def generate_fake(pipe, image: Image.Image, generator: str, rng: np.random.Generator,
-                  out_size: int) -> Image.Image:
-    """Edita `image` (fresh) → fake-damaged según la variante `generator`."""
+                  out_size: int, steps: int | None = None) -> Image.Image:
+    """Edita `image` (fresh) → fake-damaged según la variante `generator`.
+    `steps` permite bajar los pasos de difusión (más rápido; default = el de la variante)."""
     import torch
     cfg = REAL_GENERATORS[generator]
+    n_steps = steps or cfg["steps"]
     base = image.convert("RGB").resize((GEN_SIZE, GEN_SIZE))
     mask = make_mask(cfg["mask"], rng)
     seed = int(rng.integers(0, 2**31 - 1))
     gen = torch.Generator(device=pipe.device.type).manual_seed(seed)
     result = pipe(prompt=cfg["prompt"], negative_prompt=NEG_PROMPT, image=base, mask_image=mask,
-                  num_inference_steps=cfg["steps"], guidance_scale=cfg["guidance"], generator=gen).images[0]
+                  num_inference_steps=n_steps, guidance_scale=cfg["guidance"], generator=gen).images[0]
     return result.resize((out_size, out_size))

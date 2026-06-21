@@ -69,12 +69,13 @@ def build_real_manifest(cfg, out_dir: Path, n_per_group: int) -> pd.DataFrame:
 
     print(f"[2/4] generando fake-damaged con difusión real (SD 1.5 inpainting)...")
     pipe = make_inpaint_pipeline()
+    steps = cfg["real"].get("steps")
     total = sum(len(train_gens) + (1 if sp == "test" else 0) for _, sp, _ in fresh_meta)
     done = 0
     for sid, sp, img in fresh_meta:
         gens = train_gens + (held if sp == "test" else [])  # held-out solo en test
         for g in gens:
-            fake = generate_fake(pipe, img, g, np.random.default_rng(seed + sid * 17 + hash(g) % 1000), size)
+            fake = generate_fake(pipe, img, g, np.random.default_rng(seed + sid * 17 + hash(g) % 1000), size, steps=steps)
             _emit(rows, out_dir, "fake-damaged", g, "diffusion", sid, sp, fake, g)
             done += 1
             if done % 20 == 0 or done == total:
@@ -89,10 +90,14 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="configs/real.yaml")
     ap.add_argument("--n-per-group", type=int, default=None)
+    ap.add_argument("--steps", type=int, default=None, help="override pasos de difusión")
     ap.add_argument("--reuse-corpus", action="store_true", help="no regenerar; usar manifest existente")
+    ap.add_argument("--generate-only", action="store_true", help="solo generar el corpus y salir")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
+    if args.steps is not None:
+        cfg["real"]["steps"] = args.steps
     out_dir = Path(cfg["paths"]["generated"])
     results_dir = Path(cfg["paths"]["results"]); results_dir.mkdir(exist_ok=True)
     holdout = cfg["data"]["holdout_generator"]
@@ -105,6 +110,9 @@ def main() -> None:
     else:
         df = build_real_manifest(cfg, out_dir, n_per_group)
     print(f"      corpus real: {len(df)} imgs | " + df.groupby(['split', 'label']).size().to_string().replace(chr(10), ' | '))
+    if args.generate_only:
+        print("--generate-only: corpus listo, saliendo. Re-corré con --reuse-corpus para entrenar/evaluar.")
+        return
 
     # ---- modelos: ViT/ResNet fine-tune (real) + baselines forensic / zero-shot ----
     from src.decision.policy import Costs
