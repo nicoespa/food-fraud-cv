@@ -1,5 +1,24 @@
 # 04 — Resultados REALES (Colab GPU, escala informativa)
 
+## Frutas — 3-clases, multi-generador (n_per_group=150, Colab T4)
+Datos reales (Densu341) + fakes con difusión multi-generador (sd-mold/sd-rot/ip2p-rot/classic-splice + sd-fungus held-out).
+
+| modelo | PR-AUC | ROC-AUC | TPR@FPR5% | ECE | costo D0→D2 | FPR daño-real | FPR intacto |
+|---|---|---|---|---|---|---|---|
+| zero-shot (genérico) | 0.839 | 0.593 | 0.150 | 0.122 | 0.781→0.802 | **0.905** | **1.000** |
+| forensic-gbm | 0.986 | 0.976 | 0.956 | 0.046 | 0.346 | 0.000 | 0.111 |
+| **finetune-resnet50** | **1.000** | 0.999 | 0.994 | 0.020 | 0.211→**0.169** | 0.000 | 0.000 |
+
+Cross-generator TPR (held-out `sd-fungus`): forense **0.861** vs vistos 0.97–1.0; resnet50 0.972.
+classic-splice (no-AI): forense 0.972, resnet 0.917. Mejora costo D0→D2 (resnet): 0.036 [IC95 0–0.114].
+
+**Lectura:** Tesis 1 ✅ (genérico inunda FPs); modelos aprendidos ganan; gap cross-generator
+visible en el forense; resnet50 generaliza mejor; la capa de costo aporta poco porque el CNN
+ya es casi perfecto (consistente con "la decisión importa más cuanto peor el modelo").
+
+---
+## (Corrida previa, single-generator — histórica)
+
 Run: `scripts/run_real.py` en Colab GPU. Datos reales (`Densu341/Fresh-rotten-fruit`) +
 fake-damaged por **difusión real** (SD 1.5 inpainting, 25 pasos = fakes sutiles) +
 fine-tune real. n_per_group=150, split 60/20/20, costos c_fn=10 / c_fp=3 / c_review=1.
