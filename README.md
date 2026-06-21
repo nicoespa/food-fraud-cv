@@ -8,6 +8,11 @@ Final project — Ciencia de Datos (UdeSA). Replaces `meal-dispatch-uncertainty`
 > **Cómo se corre:** el slice liviano y los tests, local (`uv`). El **pipeline real**
 > (datos + difusión + fine-tune) se corre en **GPU de Colab** — abrí el badge de arriba o
 > `notebooks/food_fraud_cv_colab.ipynb`. Ver `docs/03-real-pipeline.md`.
+>
+> **Dos dominios:** frutas/verduras (3-clases claim-conditioned, `run_real.py`) y **comida
+> cocida de delivery** (autenticidad binaria con Food-101, `run_cooked.py`). El pipeline cocido
+> suma **multi-generador** (SD inpaint + InstructPix2Pix + edición clásica), **leave-one-generator-out**
+> y **robustez adversarial (FGSM)**. Ver `docs/06-cooked-food.md` y el roadmap a producción `docs/05`.
 
 **Problem.** Customers edit delivery photos with AI (add mold, make food look
 raw/spoiled) to trigger fraudulent refunds. The right question is **not** "is this

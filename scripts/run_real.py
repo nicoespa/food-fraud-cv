@@ -43,7 +43,7 @@ def _split_of(rng, ratios):
 
 def build_real_manifest(cfg, out_dir: Path, n_per_group: int) -> pd.DataFrame:
     from src.data.sources import load_fresh_rotten
-    from src.generation.diffusion import REAL_GENERATORS, make_inpaint_pipeline, generate_fake
+    from src.generation.diffusion import REAL_GENERATORS, generate_fake
 
     seed = cfg.get("seed", 42)
     size = cfg["data"]["image_size"]
@@ -68,14 +68,14 @@ def build_real_manifest(cfg, out_dir: Path, n_per_group: int) -> pd.DataFrame:
         fresh_meta.append((i, sp, img))
 
     print(f"[2/4] generando fake-damaged con difusión real (SD 1.5 inpainting)...")
-    pipe = make_inpaint_pipeline()
+    pipes: dict = {}
     steps = cfg["real"].get("steps")
     total = sum(len(train_gens) + (1 if sp == "test" else 0) for _, sp, _ in fresh_meta)
     done = 0
     for sid, sp, img in fresh_meta:
         gens = train_gens + (held if sp == "test" else [])  # held-out solo en test
         for g in gens:
-            fake = generate_fake(pipe, img, g, np.random.default_rng(seed + sid * 17 + hash(g) % 1000), size, steps=steps)
+            fake = generate_fake(pipes, img, g, np.random.default_rng(seed + sid * 17 + hash(g) % 1000), size, steps=steps)
             _emit(rows, out_dir, "fake-damaged", g, "diffusion", sid, sp, fake, g)
             done += 1
             if done % 20 == 0 or done == total:

@@ -40,17 +40,18 @@ class ZeroShotFreqDetector:
 
 
 class ForensicClassifier:
-    """GBM 3-clases sobre features forensics → P(fake-damaged)."""
+    """GBM sobre features forensics → P(fake-damaged). Soporta 2 o 3 clases (vía fake_id)."""
 
     name = "forensic-gbm"
 
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, fake_id: int = FAKE_ID):
         self.scaler = StandardScaler()
         self.clf = HistGradientBoostingClassifier(max_iter=200, learning_rate=0.1, random_state=seed)
+        self.fake_id = fake_id
 
     def fit(self, feats: np.ndarray, label_ids: np.ndarray) -> "ForensicClassifier":
         self.clf.fit(self.scaler.fit_transform(feats), label_ids)
-        self._fake_col = list(self.clf.classes_).index(FAKE_ID)
+        self._fake_col = list(self.clf.classes_).index(self.fake_id)
         return self
 
     def prob_fake(self, feats: np.ndarray) -> np.ndarray:

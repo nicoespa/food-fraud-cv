@@ -58,6 +58,9 @@ def train(df: pd.DataFrame, root: str | Path, cfg: dict, device: str | None = No
     bs = dcfg.get("batch_size", 32)
     lr = dcfg.get("lr", 3e-4)
     image_size = cfg["data"]["image_size"]
+    classes = cfg["data"]["classes"]
+    num_classes = len(classes)
+    fake_id = classes.index("fake-damaged")
     if device is None:
         device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -66,7 +69,7 @@ def train(df: pd.DataFrame, root: str | Path, cfg: dict, device: str | None = No
     loaders = {s: DataLoader(_dataset(d, root, tfm), batch_size=bs, shuffle=(s == "train"))
                for s, d in splits.items()}
 
-    model = build_model(name).to(device)
+    model = build_model(name, num_classes).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
     loss_fn = torch.nn.CrossEntropyLoss()
 
@@ -75,12 +78,12 @@ def train(df: pd.DataFrame, root: str | Path, cfg: dict, device: str | None = No
         out = []
         with torch.no_grad():
             for x, _ in loader:
-                p = model(x.to(device)).softmax(1)[:, FAKE_ID]
+                p = model(x.to(device)).softmax(1)[:, fake_id]
                 out.append(p.cpu().numpy())
         return np.concatenate(out)
 
     best_ap, best_state = -1.0, None
-    y_val = (splits["val"]["label_id"].to_numpy() == FAKE_ID).astype(int)
+    y_val = (splits["val"]["label_id"].to_numpy() == fake_id).astype(int)
     for ep in range(epochs):
         model.train()
         for x, y in loaders["train"]:
@@ -100,8 +103,11 @@ def train(df: pd.DataFrame, root: str | Path, cfg: dict, device: str | None = No
         "val_prob_fake": prob_fake(loaders["val"]),
         "val_is_fraud": y_val,
         "test_prob_fake": prob_fake(loaders["test"]),
-        "test_is_fraud": (splits["test"]["label_id"].to_numpy() == FAKE_ID).astype(int),
+        "test_is_fraud": (splits["test"]["label_id"].to_numpy() == fake_id).astype(int),
         "df_test": splits["test"],
         "backbone": name,
         "best_val_pr_auc": float(best_ap),
+        "model": model,          # expuesto para evaluación adversarial
+        "device": device,
+        "fake_id": fake_id,
     }

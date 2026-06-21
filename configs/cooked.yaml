@@ -1,0 +1,35 @@
+# food-fraud-cv — config COMIDA COCIDA (autenticidad binaria: genuine vs fake-damaged)
+# genuine = Food-101 real (pizza/hamburguesa/etc.) · fake = esas fotos editadas por difusión
+seed: 42
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  generated: data/generated_cooked    # corpus cocido separado
+  results: results
+
+data:
+  classes: [genuine, fake-damaged]    # 2 clases (autenticidad)
+  image_size: 224
+  split: {train: 0.6, val: 0.2, test: 0.2}
+  holdout_generator: sd-fungus        # familia de difusión vista SOLO en test
+
+real:
+  n_per_group: 150                    # imágenes cocidas reales (cada una → fakes)
+  steps: 25                           # pasos de difusión (sutiles). Validar rápido: --steps 8
+
+detection:
+  backbone: resnet50                  # resnet50 | vit_small_patch16_224 | resnet18
+  epochs: 12
+  batch_size: 32
+  lr: 0.0003
+  calibration: isotonic
+
+decision:
+  costs: {c_fn: 10.0, c_fp: 3.0, c_review: 1.0}
+
+evaluation:
+  metrics: [pr_auc, roc_auc, tpr_at_fpr, ece, brier, expected_cost]
+  tpr_at_fpr: 0.05
+  per_generator_breakdown: true
+  bootstrap_iters: 1000
