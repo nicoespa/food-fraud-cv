@@ -58,17 +58,20 @@ def build_cooked_corpus(cfg: dict, out_dir: Path, n: int) -> pd.DataFrame:
                          generator=generator, source_id=sid, split=_split_of(sid, seed, ratios)))
 
     print("[2/4] generando fake-damaged con difusión multi-generador...")
+    # 1 fake por imagen → corpus BALANCEADO (1 genuine : 1 fake). El generador se asigna
+    # round-robin; el held-out solo aparece en imágenes de test.
+    gchoice = random.Random(seed + 7)
+    all_gens = train_gens + held
     total = 0
     for sid, img in enumerate(imgs):
         sp = _split_of(sid, seed, ratios)
         _emit("genuine", "none", img, sid, "real")
-        gens = train_gens + (held if sp == "test" else [])
-        for g in gens:
-            fake = generate_fake(pipes, img, g, np.random.default_rng(seed + sid * 17 + hash(g) % 1000), size, steps=steps)
-            _emit("fake-damaged", g, fake, sid, g)
-            total += 1
-            if total % 20 == 0:
-                print(f"      difusión {total}")
+        g = gchoice.choice(all_gens if sp == "test" else train_gens)
+        fake = generate_fake(pipes, img, g, np.random.default_rng(seed + sid * 17 + hash(g) % 1000), size, steps=steps)
+        _emit("fake-damaged", g, fake, sid, g)
+        total += 1
+        if total % 20 == 0:
+            print(f"      difusión {total}")
 
     df = pd.DataFrame(rows)
     df.to_csv(out_dir / "manifest.csv", index=False)

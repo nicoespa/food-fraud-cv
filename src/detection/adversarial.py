@@ -11,7 +11,7 @@ import numpy as np
 from src.detection.finetune import IMAGENET_MEAN, IMAGENET_STD
 
 
-def evaluate_fgsm(model, images, fake_id: int, eps_list=(0.0, 0.005, 0.01, 0.02, 0.03),
+def evaluate_fgsm(model, images, fake_id: int, eps_list=(0.0, 0.01, 0.03, 0.06, 0.1, 0.15),
                   device: str = "cpu") -> dict:
     """TPR sobre fakes (predecir 'fake') bajo FGSM a cada epsilon.
 

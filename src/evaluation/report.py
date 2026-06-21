@@ -46,7 +46,7 @@ def per_generator_breakdown(df_test: pd.DataFrame, probs: np.ndarray, costs: Cos
         if m.any():
             tag = f"tpr[{g}]" + ("*held-out" if g == holdout else "")
             out[tag] = float(pred_fraud[m].mean())
-    for cls in ("genuine-damaged", "genuine-undamaged"):
+    for cls in sorted(set(labels) - {"fake-damaged"}):  # cualquier clase genuina (frutas o cocido)
         m = labels == cls
         if m.any():
             out[f"fpr[{cls}]"] = float(pred_fraud[m].mean())
