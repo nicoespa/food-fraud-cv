@@ -21,6 +21,27 @@ uv run --extra real python scripts/run_generalization.py --skip-cnn   # solo for
 ```
 Salida: `results/generalization.json` + tablas en consola.
 
+## RESULTADOS (Colab GPU · frutas 936 imgs · cocido 300 imgs)
+
+**Forense (PR-AUC / ROC-AUC):**
+| setup | PR-AUC | ROC-AUC |
+|---|---|---|
+| in-domain · frutas | 0.993 | 0.980 |
+| in-domain · cocido | 0.913 | 0.877 |
+| **cross · frutas→cocido** | **0.535** | 0.561 |
+| **cross · cocido→frutas** | **0.713** | 0.641 |
+
+**CNN (ResNet) cross-domain:** train frutas→test cocido **0.685** · train cocido→test frutas **0.876**.
+
+**CNN leave-one-generator-out** (held-out `classic-splice`): TPR **0.222** (PR-AUC 0.637) — el CNN **también** colapsa ante una familia no vista (forense fue 0.25).
+
+### Lectura (la respuesta honesta)
+- **Hay un gap de generalización real.** In-domain ~0.91–0.99 → **cross-domain 0.54–0.88**. O sea: los números altos NO eran testear-sobre-entrenamiento (el test es held-out), pero **sí eran misma distribución**. Sobre comida genuinamente distinta, **cae** → el modelo aprendió señales del dominio, no un "detector universal de fraude".
+- **El CNN generaliza MEJOR que el forense** (0.685–0.876 vs 0.535–0.713): las features semánticas transfieren más que los artefactos de bajo nivel.
+- **Entrenar en lo difícil (cocido) → testear en lo fácil (frutas) = 0.876**; al revés (frutas→cocido) = 0.685. El dominio de entrenamiento más rico da features más robustas.
+- **Ni el CNN generaliza a una familia de edición no vista** (0.22). → Justifica el ensemble multi-señal + reentrenamiento continuo (drift) en producción.
+- **Conclusión:** funciona in-distribution, degrada out-of-distribution. Honesto y esperable. Producción necesita datos del dominio real + monitoreo de drift (Fase B).
+
 ## Cómo leer el resultado (qué significaría cada caso)
 - **Cross-domain alto (~in-domain):** el modelo capta señales de manipulación **generales**
   → confiable, generaliza a comida nueva. Fuerte para el informe.
