@@ -46,6 +46,62 @@ def build_model(name: str, num_classes: int = 3):
     return timm.create_model(name, pretrained=True, num_classes=num_classes)
 
 
+def _ds_binary(df: pd.DataFrame, root: Path, tfm, labels):
+    """Dataset binario (is_fraud) con paths relativos a `root` (permite cross-domain)."""
+    import torch
+    from PIL import Image
+    paths = [Path(root) / p for p in df["path"]]
+
+    class _DS(torch.utils.data.Dataset):
+        def __len__(self): return len(paths)
+
+        def __getitem__(self, i):
+            return tfm(Image.open(paths[i]).convert("RGB")), int(labels[i])
+
+    return _DS()
+
+
+def cross_domain_cnn(df_train: pd.DataFrame, root_train, df_test: pd.DataFrame, root_test,
+                     cfg: dict, device: str | None = None, epochs: int | None = None) -> dict:
+    """Entrena un CNN binario (fake-damaged vs resto) en UN corpus y lo testea en OTRO.
+
+    Prueba de generalización a datos NUEVOS (otra comida / otro generador). Devuelve la
+    probabilidad de fraude y is_fraud del set de test.
+    """
+    import torch
+    from torch.utils.data import DataLoader
+    dcfg = cfg["detection"]
+    name = dcfg.get("backbone", "resnet50")
+    epochs = epochs or dcfg.get("epochs", 8)
+    bs = dcfg.get("batch_size", 32)
+    lr = dcfg.get("lr", 3e-4)
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
+
+    def yb(df):
+        return (df["label"] == "fake-damaged").astype(int).to_numpy()
+
+    tfm = _build_transforms(cfg["data"]["image_size"])
+    tr = DataLoader(_ds_binary(df_train, root_train, tfm, yb(df_train)), batch_size=bs, shuffle=True)
+    te = DataLoader(_ds_binary(df_test, root_test, tfm, yb(df_test)), batch_size=bs)
+
+    model = build_model(name, 2).to(device)
+    opt = torch.optim.AdamW(model.parameters(), lr=lr)
+    loss_fn = torch.nn.CrossEntropyLoss()
+    for _ in range(epochs):
+        model.train()
+        for x, y in tr:
+            opt.zero_grad(); loss_fn(model(x.to(device)), y.to(device)).backward(); opt.step()
+
+    model.eval()
+    probs = []
+    with torch.no_grad():
+        for x, _ in te:
+            probs.append(model(x.to(device)).softmax(1)[:, 1].cpu().numpy())
+    import numpy as _np
+    return {"prob": _np.concatenate(probs), "is_fraud": yb(df_test), "backbone": name}
+
+
 def train(df: pd.DataFrame, root: str | Path, cfg: dict, device: str | None = None) -> dict:
     import torch
     from sklearn.metrics import average_precision_score
