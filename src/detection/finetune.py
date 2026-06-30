@@ -18,12 +18,29 @@ IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
 def _build_transforms(image_size: int):
+    """Eval transform simple (usado por adversarial). El training usa _make_transforms."""
     from torchvision import transforms
     return transforms.Compose([
         transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
         transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
     ])
+
+
+def _make_transforms(model, training: bool):
+    """Transforms derivadas del modelo (normalización correcta por backbone: ImageNet/CLIP/etc.)
+    + AUGMENTATION fuerte en training (RandAugment + jitter + random-erasing) para mejorar
+    generalización. Si el backbone no es timm-compatible, cae a ImageNet básico."""
+    import timm
+    try:
+        dc = timm.data.resolve_model_data_config(model)
+        if training:
+            return timm.data.create_transform(**dc, is_training=True,
+                                              auto_augment="rand-m7-n2-mstd0.5", re_prob=0.2, hflip=0.5)
+        return timm.data.create_transform(**dc, is_training=False)
+    except Exception:
+        size = dc["input_size"][-1] if "dc" in dir() else 224
+        return _build_transforms(size)
 
 
 def _dataset(df: pd.DataFrame, root: Path, tfm):
@@ -81,11 +98,10 @@ def cross_domain_cnn(df_train: pd.DataFrame, root_train, df_test: pd.DataFrame, 
     def yb(df):
         return (df["label"] == "fake-damaged").astype(int).to_numpy()
 
-    tfm = _build_transforms(cfg["data"]["image_size"])
-    tr = DataLoader(_ds_binary(df_train, root_train, tfm, yb(df_train)), batch_size=bs, shuffle=True)
-    te = DataLoader(_ds_binary(df_test, root_test, tfm, yb(df_test)), batch_size=bs)
-
     model = build_model(name, 2).to(device)
+    tfm_tr, tfm_ev = _make_transforms(model, True), _make_transforms(model, False)
+    tr = DataLoader(_ds_binary(df_train, root_train, tfm_tr, yb(df_train)), batch_size=bs, shuffle=True)
+    te = DataLoader(_ds_binary(df_test, root_test, tfm_ev, yb(df_test)), batch_size=bs)
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
     loss_fn = torch.nn.CrossEntropyLoss()
     for _ in range(epochs):
@@ -120,12 +136,12 @@ def train(df: pd.DataFrame, root: str | Path, cfg: dict, device: str | None = No
     if device is None:
         device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
 
-    tfm = _build_transforms(image_size)
-    splits = {s: df[df["split"] == s].reset_index(drop=True) for s in ("train", "val", "test")}
-    loaders = {s: DataLoader(_dataset(d, root, tfm), batch_size=bs, shuffle=(s == "train"))
-               for s, d in splits.items()}
-
     model = build_model(name, num_classes).to(device)
+    tfm_tr, tfm_ev = _make_transforms(model, True), _make_transforms(model, False)
+    splits = {s: df[df["split"] == s].reset_index(drop=True) for s in ("train", "val", "test")}
+    loaders = {s: DataLoader(_dataset(d, root, tfm_tr if s == "train" else tfm_ev),
+                             batch_size=bs, shuffle=(s == "train"))
+               for s, d in splits.items()}
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
     loss_fn = torch.nn.CrossEntropyLoss()
 

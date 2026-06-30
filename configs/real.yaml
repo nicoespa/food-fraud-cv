@@ -20,7 +20,8 @@ real:
   steps: 25                          # pasos altos → fakes SUTILES (más difícil = más informativo)
 
 detection:
-  backbone: resnet50                 # timm: resnet50 | vit_small_patch16_224 | resnet18 (rápido)
+  # ViT IN-21k → mejor transferencia que resnet-IN1k. Fuerte: vit_base_patch16_clip_224.openai. Rápido: resnet50.
+  backbone: vit_small_patch16_224.augreg_in21k
   epochs: 12
   batch_size: 32
   lr: 0.0003

@@ -97,6 +97,21 @@ def main() -> None:
     print(f"  train cocido → test frutas : PR-AUC {ap2:.3f}")
     out["cnn_cross"] = {"fruit_to_cooked": ap1, "cooked_to_fruit": ap2, "backbone": r1["backbone"]}
 
+    # ---- CNN: domain mixing (entrenar AMBOS dominios juntos) ----
+    print("\n=== CNN · domain mixing (train frutas+cocido) ===")
+    fa = df_f.copy(); fa["path"] = [str((dir_f / p).resolve()) for p in df_f["path"]]; fa["dom"] = "frutas"
+    ca = df_c.copy(); ca["path"] = [str((dir_c / p).resolve()) for p in df_c["path"]]; ca["dom"] = "cocido"
+    train_comb = pd.concat([fa[trf], ca[trc]], ignore_index=True)
+    test_comb = pd.concat([fa[tef], ca[tec]], ignore_index=True)
+    rc = cross_domain_cnn(train_comb, "/", test_comb, "/", cf_c, epochs=args.epochs)
+    dom = test_comb["dom"].to_numpy()
+    mix = {}
+    for d in ("frutas", "cocido"):
+        m = dom == d
+        mix[d] = float(average_precision_score(rc["is_fraud"][m], rc["prob"][m]))
+        print(f"  train AMBOS → test {d}: PR-AUC {mix[d]:.3f}   (comparar vs cross-domain de arriba)")
+    out["cnn_domain_mixing"] = mix
+
     # ---- CNN: leave-one-generator-out sobre classic-splice (cocido) ----
     print("\n=== CNN · leave-one-generator-out (held-out = classic-splice) ===")
     held = "classic-splice"

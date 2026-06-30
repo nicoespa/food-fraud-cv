@@ -84,6 +84,7 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=None, help="imágenes cocidas (override n_per_group)")
     ap.add_argument("--steps", type=int, default=None)
     ap.add_argument("--reuse-corpus", action="store_true")
+    ap.add_argument("--generate-only", action="store_true", help="solo generar el corpus y salir")
     ap.add_argument("--adversarial", action="store_true", help="evaluar robustez FGSM del resnet")
     args = ap.parse_args()
 
@@ -104,6 +105,8 @@ def main() -> None:
     else:
         df = build_cooked_corpus(cfg, out_dir, n)
     print(f"      corpus cocido: {len(df)} imgs | " + df.groupby(['split', 'label']).size().to_string().replace(chr(10), ' | '))
+    if args.generate_only:
+        print("--generate-only: corpus listo, saliendo."); return
 
     from src.data.corpus import load_images
     from src.decision.policy import Costs
